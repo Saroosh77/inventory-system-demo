@@ -1,0 +1,670 @@
+// Demo data model.
+//
+// This is the inventory/invoicing/reporting slice of the platform: master
+// data, stock control, the sales invoice register, and the company general
+// ledger that backs the P&L, trial balance and balance sheet. Order booking,
+// delivery, purchasing, manufacturing, recovery and payroll are not part of
+// this demo build and have no tables here.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum UserRole {
+  ADMIN
+  FINANCE
+  WAREHOUSE_STAFF
+}
+
+enum WarehouseType {
+  COMPANY
+  DISTRIBUTOR
+}
+
+enum CustomerType {
+  DISTRIBUTOR
+  RETAILER
+}
+
+enum StaffRole {
+  SALESPERSON
+  BOOKER
+  RECOVERY
+  DELIVERY
+  WAREHOUSE
+  FINANCE
+  ADMINISTRATION
+}
+
+enum ProductType {
+  RAW_MATERIAL
+  PACKAGING
+  FINISHED_GOOD
+}
+
+enum SupplyType {
+  PURCHASED
+  MANUFACTURED
+}
+
+enum UnitOfMeasure {
+  GRAM
+  KILOGRAM
+  MILLILITRE
+  LITRE
+  PIECE
+  PACKET
+  CARTON
+  BAG
+}
+
+enum SalesType {
+  PRIMARY
+  SECONDARY
+  DIRECT
+}
+
+enum SellerType {
+  COMPANY
+  DISTRIBUTOR
+}
+
+enum TaxType {
+  GST
+  NON_GST
+}
+
+enum InvoiceStatus {
+  DRAFT
+  POSTED
+  PARTIAL
+  PAID
+  CANCELLED
+}
+
+enum DeliveryStatus {
+  PENDING
+  STOCK_ISSUED
+  DELIVERED
+  CLOSED
+  CANCELLED
+}
+
+enum PaymentMethod {
+  CASH
+  BANK
+  CHEQUE
+  ONLINE
+  ADJUSTMENT
+  OTHER
+}
+
+enum MovementType {
+  OPENING
+  PRIMARY_OUT
+  PRIMARY_IN
+  SECONDARY_OUT
+  DIRECT_OUT
+  TRANSFER_OUT
+  TRANSFER_IN
+  SALE_RETURN
+  DISTRIBUTOR_RETURN
+  ADJUSTMENT_IN
+  ADJUSTMENT_OUT
+  DAMAGE
+  EXPIRY
+}
+
+enum BatchStatus {
+  ACTIVE
+  EXPIRED
+  RECALLED
+}
+
+enum AdjustmentDirection {
+  IN
+  OUT
+}
+
+enum AccountType {
+  ASSET
+  LIABILITY
+  EQUITY
+  REVENUE
+  EXPENSE
+}
+
+model User {
+  id                   String                @id @default(cuid())
+  email                String                @unique
+  name                 String
+  role                 UserRole              @default(ADMIN)
+  passwordHash         String?
+  active               Boolean               @default(true)
+  warehouseId          String?
+  warehouse            Warehouse?            @relation(fields: [warehouseId], references: [id])
+  staffId              String?               @unique
+  staff                Staff?                @relation(fields: [staffId], references: [id])
+  createdInvoices      Invoice[]             @relation("InvoiceCreator")
+  inventoryAdjustments InventoryAdjustment[]
+  stockTransfers       StockTransfer[]
+  journalEntries       JournalEntry[]        @relation("JournalEntryCreator")
+  authSessions         AuthSession[]
+  createdAt            DateTime              @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime              @updatedAt @db.Timestamptz(3)
+
+  @@index([role])
+  @@index([warehouseId])
+}
+
+model AuthSession {
+  id        String   @id @default(cuid())
+  tokenHash String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime @db.Timestamptz(3)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model LoginThrottle {
+  key             String    @id
+  failedAttempts  Int       @default(0)
+  windowStartedAt DateTime  @default(now()) @db.Timestamptz(3)
+  blockedUntil    DateTime? @db.Timestamptz(3)
+  updatedAt       DateTime  @updatedAt @db.Timestamptz(3)
+
+  @@index([blockedUntil])
+}
+
+model City {
+  id           String        @id @default(cuid())
+  name         String
+  province     String        @default("Unknown")
+  active       Boolean       @default(true)
+  distributors Distributor[]
+  warehouses   Warehouse[]
+  territories  Territory[]
+  routes       Route[]
+  staff        Staff[]
+  customers    Customer[]
+  createdAt    DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime      @updatedAt @db.Timestamptz(3)
+
+  @@unique([name, province])
+  @@index([active, province])
+}
+
+model Distributor {
+  id         String      @id @default(cuid())
+  name       String
+  cityId     String
+  city       City        @relation(fields: [cityId], references: [id])
+  phone      String?
+  active     Boolean     @default(true)
+  warehouses Warehouse[]
+  routes     Route[]
+  staff      Staff[]
+  customers  Customer[]
+  invoices   Invoice[]
+  payments   Payment[]
+  createdAt  DateTime    @default(now()) @db.Timestamptz(3)
+  updatedAt  DateTime    @updatedAt @db.Timestamptz(3)
+
+  @@unique([name, cityId])
+  @@index([cityId])
+  @@index([active])
+}
+
+model Warehouse {
+  id                   String                @id @default(cuid())
+  name                 String
+  shortName            String
+  cityId               String
+  city                 City                  @relation(fields: [cityId], references: [id])
+  warehouseType        WarehouseType
+  distributorId        String?
+  distributor          Distributor?          @relation(fields: [distributorId], references: [id])
+  active               Boolean               @default(true)
+  users                User[]
+  sourceInvoices       Invoice[]             @relation("SourceWarehouse")
+  destinationInvoices  Invoice[]             @relation("DestinationWarehouse")
+  stockMovements       StockMovement[]
+  stockBatches         StockBatch[]
+  stockBalances        StockBalance[]
+  inventoryAdjustments InventoryAdjustment[]
+  outgoingTransfers    StockTransfer[]       @relation("TransferSourceWarehouse")
+  incomingTransfers    StockTransfer[]       @relation("TransferDestinationWarehouse")
+  createdAt            DateTime              @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime              @updatedAt @db.Timestamptz(3)
+
+  @@unique([name, cityId])
+  @@index([cityId])
+  @@index([distributorId])
+  @@index([active, warehouseType])
+}
+
+model Territory {
+  id        String     @id @default(cuid())
+  name      String
+  cityId    String
+  city      City       @relation(fields: [cityId], references: [id])
+  active    Boolean    @default(true)
+  routes    Route[]
+  customers Customer[]
+  createdAt DateTime   @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime   @updatedAt @db.Timestamptz(3)
+
+  @@unique([name, cityId])
+  @@index([cityId])
+}
+
+model Route {
+  id            String       @id @default(cuid())
+  name          String
+  cityId        String
+  city          City         @relation(fields: [cityId], references: [id])
+  territoryId   String?
+  territory     Territory?   @relation(fields: [territoryId], references: [id])
+  distributorId String?
+  distributor   Distributor? @relation(fields: [distributorId], references: [id])
+  active        Boolean      @default(true)
+  staff         Staff[]
+  customers     Customer[]
+  invoices      Invoice[]
+  payments      Payment[]
+  createdAt     DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime     @updatedAt @db.Timestamptz(3)
+
+  @@unique([name, cityId])
+  @@index([cityId])
+  @@index([distributorId])
+  @@index([active])
+}
+
+model Staff {
+  id            String       @id @default(cuid())
+  employeeCode  String?      @unique
+  name          String
+  staffRole     StaffRole
+  designation   String?
+  phone         String?
+  baseSalary    Int          @default(0)
+  joiningDate   DateTime?    @db.Date
+  cityId        String
+  city          City         @relation(fields: [cityId], references: [id])
+  distributorId String?
+  distributor   Distributor? @relation(fields: [distributorId], references: [id])
+  routeId       String?
+  route         Route?       @relation(fields: [routeId], references: [id])
+  active        Boolean      @default(true)
+  user          User?
+  customers     Customer[]   @relation("AssignedBooker")
+  invoices      Invoice[]    @relation("InvoiceBooker")
+  payments      Payment[]    @relation("PaymentCollector")
+  createdAt     DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime     @updatedAt @db.Timestamptz(3)
+
+  @@index([cityId])
+  @@index([distributorId])
+  @@index([routeId])
+  @@index([active, staffRole])
+}
+
+model Customer {
+  id               String       @id @default(cuid())
+  name             String
+  customerType     CustomerType
+  address          String?
+  phone            String?
+  gstNumber        String?
+  taxRegistered    Boolean      @default(false)
+  cityId           String
+  city             City         @relation(fields: [cityId], references: [id])
+  distributorId    String?
+  distributor      Distributor? @relation(fields: [distributorId], references: [id])
+  territoryId      String?
+  territory        Territory?   @relation(fields: [territoryId], references: [id])
+  routeId          String?
+  route            Route?       @relation(fields: [routeId], references: [id])
+  assignedBookerId String?
+  assignedBooker   Staff?       @relation("AssignedBooker", fields: [assignedBookerId], references: [id])
+  creditLimit      Int          @default(0)
+  creditDays       Int          @default(0)
+  openingBalance   Int          @default(0)
+  active           Boolean      @default(true)
+  invoices         Invoice[]
+  payments         Payment[]
+  createdAt        DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime     @updatedAt @db.Timestamptz(3)
+
+  @@index([cityId])
+  @@index([distributorId])
+  @@index([routeId])
+  @@index([assignedBookerId])
+  @@index([active, customerType])
+}
+
+model Product {
+  id              String                    @id @default(cuid())
+  sku             String                    @unique
+  name            String
+  productType     ProductType               @default(FINISHED_GOOD)
+  supplyType      SupplyType                @default(PURCHASED)
+  baseUnit        UnitOfMeasure             @default(PIECE)
+  unit            String                    @default("case")
+  standardCost    Int                       @default(0)
+  defaultPrice    Int                       @default(0)
+  active          Boolean                   @default(true)
+  version         Int                       @default(1)
+  invoiceItems    InvoiceItem[]
+  stockMovements  StockMovement[]
+  stockBatches    StockBatch[]
+  stockBalances   StockBalance[]
+  adjustmentItems InventoryAdjustmentItem[]
+  transferItems   StockTransferItem[]
+  createdAt       DateTime                  @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime                  @updatedAt @db.Timestamptz(3)
+
+  @@index([active, productType])
+}
+
+model Invoice {
+  id                     String         @id @default(cuid())
+  invoiceNumber          String         @unique
+  invoiceDate            DateTime       @db.Date
+  dueDate                DateTime?      @db.Date
+  salesType              SalesType
+  sellerType             SellerType
+  taxType                TaxType        @default(NON_GST)
+  taxRateBps             Int            @default(0)
+  distributorId          String?
+  distributor            Distributor?   @relation(fields: [distributorId], references: [id])
+  customerId             String
+  customer               Customer       @relation(fields: [customerId], references: [id])
+  warehouseId            String
+  warehouse              Warehouse      @relation("SourceWarehouse", fields: [warehouseId], references: [id])
+  destinationWarehouseId String?
+  destinationWarehouse   Warehouse?     @relation("DestinationWarehouse", fields: [destinationWarehouseId], references: [id])
+  bookerId               String?
+  booker                 Staff?         @relation("InvoiceBooker", fields: [bookerId], references: [id])
+  routeId                String?
+  route                  Route?         @relation(fields: [routeId], references: [id])
+  createdById            String?
+  createdBy              User?          @relation("InvoiceCreator", fields: [createdById], references: [id])
+  grossAmount            Int
+  discount               Int            @default(0)
+  taxableAmount          Int            @default(0)
+  taxAmount              Int            @default(0)
+  netAmount              Int
+  paidAmount             Int            @default(0)
+  balanceAmount          Int
+  status                 InvoiceStatus  @default(POSTED)
+  deliveryStatus         DeliveryStatus @default(PENDING)
+  items                  InvoiceItem[]
+  payments               Payment[]
+  createdAt              DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt              DateTime       @updatedAt @db.Timestamptz(3)
+
+  @@index([invoiceDate])
+  @@index([salesType])
+  @@index([taxType])
+  @@index([customerId])
+  @@index([warehouseId])
+  @@index([bookerId])
+  @@index([deliveryStatus])
+}
+
+model InvoiceItem {
+  id               String      @id @default(cuid())
+  invoiceId        String
+  invoice          Invoice     @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  productId        String
+  product          Product     @relation(fields: [productId], references: [id])
+  quantity         Int
+  unitPrice        Int
+  unitCostSnapshot Int         @default(0)
+  discount         Int         @default(0)
+  lineTotal        Int
+  batchId          String?
+  batch            StockBatch? @relation(fields: [batchId], references: [id])
+  createdAt        DateTime    @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime    @updatedAt @db.Timestamptz(3)
+
+  @@index([invoiceId])
+  @@index([productId])
+  @@index([batchId])
+}
+
+model Payment {
+  id            String        @id @default(cuid())
+  receiptNumber String        @unique
+  customerId    String
+  customer      Customer      @relation(fields: [customerId], references: [id])
+  distributorId String?
+  distributor   Distributor?  @relation(fields: [distributorId], references: [id])
+  invoiceId     String?
+  invoice       Invoice?      @relation(fields: [invoiceId], references: [id])
+  paymentDate   DateTime      @db.Date
+  amount        Int
+  paymentMethod PaymentMethod
+  /// Payment accepted before the goods left the warehouse. Recorded explicitly
+  /// so collections taken up front stay distinguishable from recovery against
+  /// a delivered invoice.
+  isAdvance     Boolean       @default(false)
+  collectedById String?
+  collectedBy   Staff?        @relation("PaymentCollector", fields: [collectedById], references: [id])
+  routeId       String?
+  route         Route?        @relation(fields: [routeId], references: [id])
+  notes         String?
+  createdAt     DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime      @updatedAt @db.Timestamptz(3)
+
+  @@index([paymentDate])
+  @@index([customerId])
+  @@index([invoiceId])
+  @@index([collectedById])
+  @@index([isAdvance])
+}
+
+model InventoryAdjustment {
+  id               String                    @id @default(cuid())
+  adjustmentNumber String                    @unique
+  warehouseId      String
+  warehouse        Warehouse                 @relation(fields: [warehouseId], references: [id])
+  adjustmentDate   DateTime                  @db.Date
+  reason           String
+  createdById      String
+  createdBy        User                      @relation(fields: [createdById], references: [id])
+  items            InventoryAdjustmentItem[]
+  createdAt        DateTime                  @default(now()) @db.Timestamptz(3)
+
+  @@index([warehouseId, adjustmentDate])
+}
+
+model InventoryAdjustmentItem {
+  id                    String              @id @default(cuid())
+  inventoryAdjustmentId String
+  inventoryAdjustment   InventoryAdjustment @relation(fields: [inventoryAdjustmentId], references: [id], onDelete: Cascade)
+  productId             String
+  product               Product             @relation(fields: [productId], references: [id])
+  batchId               String?
+  batch                 StockBatch?         @relation(fields: [batchId], references: [id])
+  direction             AdjustmentDirection
+  quantity              Decimal             @db.Decimal(18, 3)
+  unitCost              Int
+  createdAt             DateTime            @default(now()) @db.Timestamptz(3)
+
+  @@index([inventoryAdjustmentId])
+  @@index([productId])
+}
+
+model StockTransfer {
+  id              String              @id @default(cuid())
+  transferNumber  String              @unique
+  fromWarehouseId String
+  fromWarehouse   Warehouse           @relation("TransferSourceWarehouse", fields: [fromWarehouseId], references: [id])
+  toWarehouseId   String
+  toWarehouse     Warehouse           @relation("TransferDestinationWarehouse", fields: [toWarehouseId], references: [id])
+  transferDate    DateTime            @db.Date
+  notes           String?
+  createdById     String
+  createdBy       User                @relation(fields: [createdById], references: [id])
+  items           StockTransferItem[]
+  createdAt       DateTime            @default(now()) @db.Timestamptz(3)
+
+  @@index([fromWarehouseId, transferDate])
+  @@index([toWarehouseId, transferDate])
+}
+
+model StockTransferItem {
+  id              String        @id @default(cuid())
+  stockTransferId String
+  stockTransfer   StockTransfer @relation(fields: [stockTransferId], references: [id], onDelete: Cascade)
+  productId       String
+  product         Product       @relation(fields: [productId], references: [id])
+  quantity        Decimal       @db.Decimal(18, 3)
+  unitCost        Int
+  createdAt       DateTime      @default(now()) @db.Timestamptz(3)
+
+  @@unique([stockTransferId, productId])
+  @@index([productId])
+}
+
+model StockBatch {
+  id                String                    @id @default(cuid())
+  productId         String
+  product           Product                   @relation(fields: [productId], references: [id])
+  warehouseId       String
+  warehouse         Warehouse                 @relation(fields: [warehouseId], references: [id])
+  batchNumber       String
+  manufacturingDate DateTime?                 @db.Date
+  expiryDate        DateTime                  @db.Date
+  quantity          Decimal                   @default(0) @db.Decimal(18, 3)
+  status            BatchStatus               @default(ACTIVE)
+  invoiceItems      InvoiceItem[]
+  stockMovements    StockMovement[]
+  adjustmentItems   InventoryAdjustmentItem[]
+  createdAt         DateTime                  @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime                  @updatedAt @db.Timestamptz(3)
+
+  @@unique([warehouseId, productId, batchNumber])
+  @@index([productId])
+  @@index([expiryDate])
+}
+
+model StockMovement {
+  id            String       @id @default(cuid())
+  productId     String
+  product       Product      @relation(fields: [productId], references: [id])
+  warehouseId   String
+  warehouse     Warehouse    @relation(fields: [warehouseId], references: [id])
+  batchId       String?
+  batch         StockBatch?  @relation(fields: [batchId], references: [id])
+  movementType  MovementType
+  quantityIn    Decimal      @default(0) @db.Decimal(18, 3)
+  quantityOut   Decimal      @default(0) @db.Decimal(18, 3)
+  unitCost      Int          @default(0)
+  referenceType String
+  referenceId   String
+  movementDate  DateTime     @db.Date
+  notes         String?
+  createdAt     DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime     @updatedAt @db.Timestamptz(3)
+
+  @@index([warehouseId, productId])
+  @@index([movementDate])
+  @@index([referenceType, referenceId])
+}
+
+model StockBalance {
+  productId   String
+  warehouseId String
+
+  quantityOnHand   Decimal @default(0) @db.Decimal(18, 3)
+  reservedQuantity Decimal @default(0) @db.Decimal(18, 3)
+
+  version   Int      @default(1)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  product   Product   @relation(fields: [productId], references: [id], onDelete: Restrict)
+  warehouse Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
+
+  @@id([productId, warehouseId])
+  @@index([warehouseId])
+}
+
+model Counter {
+  key   String @id
+  value Int
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorId    String?
+  actorName  String   @default("Local administrator")
+  action     String
+  entityType String
+  entityId   String
+  before     Json?
+  after      Json?
+  createdAt  DateTime @default(now()) @db.Timestamptz(3)
+
+  @@index([entityType, entityId])
+  @@index([createdAt])
+}
+
+/// Fixed chart of accounts for the company-scope general ledger. Rows are
+/// seeded once by migration, not user-creatable — see
+/// lib/server/modules/ledger/chart-of-accounts.ts for the canonical list.
+model Account {
+  id        String        @id @default(cuid())
+  code      String        @unique
+  name      String
+  type      AccountType
+  active    Boolean       @default(true)
+  lines     JournalLine[]
+  createdAt DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime      @updatedAt @db.Timestamptz(3)
+
+  @@index([type, active])
+}
+
+model JournalEntry {
+  id            String        @id @default(cuid())
+  entryNumber   String        @unique
+  entryDate     DateTime      @db.Date
+  referenceType String
+  referenceId   String
+  description   String
+  createdById   String
+  createdBy     User          @relation("JournalEntryCreator", fields: [createdById], references: [id])
+  lines         JournalLine[]
+  createdAt     DateTime      @default(now()) @db.Timestamptz(3)
+
+  @@index([entryDate])
+  @@index([referenceType, referenceId])
+}
+
+model JournalLine {
+  id             String       @id @default(cuid())
+  journalEntryId String
+  journalEntry   JournalEntry @relation(fields: [journalEntryId], references: [id], onDelete: Cascade)
+  accountId      String
+  account        Account      @relation(fields: [accountId], references: [id])
+  debit          Int          @default(0)
+  credit         Int          @default(0)
+  createdAt      DateTime     @default(now()) @db.Timestamptz(3)
+
+  @@index([accountId])
+  @@index([journalEntryId])
+}

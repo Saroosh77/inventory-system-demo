@@ -1,0 +1,13 @@
+import { stockQuerySchema } from "@/lib/server/modules/inventory/inventory-validation";
+import { listStock } from "@/lib/server/modules/inventory/stock-service";
+import { apiHandler, queryObject, requireRequestActor } from "@/lib/server/platform/api-handler";
+
+export const dynamic = "force-dynamic";
+
+export async function GET(request: Request) {
+  return apiHandler(request, async () => {
+    const actor = await requireRequestActor(request);
+    const query = stockQuerySchema.parse(queryObject(request));
+    return Response.json(await listStock(actor, query));
+  });
+}

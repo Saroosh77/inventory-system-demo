@@ -1,0 +1,53 @@
+{
+  "name": "inventory-system-demo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Client demo build: inventory, invoicing, reporting, administration and dashboard, loaded with fictional data",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "postinstall": "prisma generate",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test tests/**/*.test.ts",
+    "check": "npm run lint && npm run typecheck && npm test && npm run build",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate dev",
+    "db:migrate:deploy": "prisma migrate deploy",
+    "db:seed": "tsx prisma/seed.ts",
+    "db:reset": "prisma migrate reset --force --skip-seed && npm run db:seed",
+    "db:studio": "prisma studio",
+    "auth:bootstrap": "tsx scripts/bootstrap-admin.ts",
+    "demo:up": "docker compose up -d database && npm run db:migrate:deploy && npm run db:seed"
+  },
+  "dependencies": {
+    "@prisma/client": "6.19.3",
+    "bcryptjs": "^3.0.3",
+    "lucide-react": "^0.468.0",
+    "next": "16.3.0",
+    "react": "19.2.6",
+    "react-dom": "19.2.6",
+    "recharts": "^3.10.1",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "4.2.1",
+    "@types/node": "22.19.19",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "19.2.3",
+    "eslint": "^9.39.5",
+    "eslint-config-next": "16.2.6",
+    "prisma": "6.19.3",
+    "tailwindcss": "4.2.1",
+    "tsx": "^4.20.6",
+    "typescript": "5.9.3"
+  },
+  "overrides": {
+    "postcss": "8.5.24",
+    "sharp": "0.35.3"
+  }
+}
