@@ -3,10 +3,14 @@ name: Refresh demo data
 # The demo signs visitors in as an administrator, so they can edit and delete
 # records. This restores the data set every day so the demo cannot degrade.
 #
-# Requires two repository secrets:
-#   DEMO_DATABASE_URL  — connection string for the DEMO database only.
+# Requires three repository secrets:
+#   DEMO_DATABASE_URL  — pooled connection string for the DEMO database only.
 #                        Never point this at anything but the demo instance:
 #                        the seed truncates every table before it writes.
+#   DEMO_DIRECT_URL    — non-pooled connection string for the same database
+#                        (migrations need a direct connection; the pooler
+#                        doesn't support the session locks `migrate deploy`
+#                        requires).
 #   DEMO_USER_PASSWORD — password assigned to the three demo accounts.
 
 on:
@@ -39,11 +43,11 @@ jobs:
         run: npx prisma migrate deploy
         env:
           DATABASE_URL: ${{ secrets.DEMO_DATABASE_URL }}
-          DIRECT_URL: ${{ secrets.DEMO_DATABASE_URL }}
+          DIRECT_URL: ${{ secrets.DEMO_DIRECT_URL }}
 
       - name: Reload demo data
         run: npm run db:seed
         env:
           DATABASE_URL: ${{ secrets.DEMO_DATABASE_URL }}
-          DIRECT_URL: ${{ secrets.DEMO_DATABASE_URL }}
+          DIRECT_URL: ${{ secrets.DEMO_DIRECT_URL }}
           DEMO_USER_PASSWORD: ${{ secrets.DEMO_USER_PASSWORD }}
