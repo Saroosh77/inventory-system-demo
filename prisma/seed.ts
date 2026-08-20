@@ -633,7 +633,7 @@ async function main() {
           },
         });
       },
-      { timeout: 20_000 },
+      { timeout: 30_000 },
     );
     if (countsAsCompanyAsset) openingInventoryValue += quantity * unitCost;
   }
@@ -1025,7 +1025,7 @@ async function main() {
           }
           paymentCount += 1;
         },
-        { timeout: 30_000 },
+        { timeout: 60_000 },
       );
 
       if (lines.length) invoiceCount += 1;
@@ -1090,7 +1090,7 @@ async function main() {
           });
         }
       },
-      { timeout: 30_000 },
+      { timeout: 60_000 },
     );
   }
   await transfer(58, finishedGoods.slice(0, 5));
@@ -1204,7 +1204,7 @@ async function main() {
           });
         }
       },
-      { timeout: 30_000 },
+      { timeout: 60_000 },
     );
   }
 
