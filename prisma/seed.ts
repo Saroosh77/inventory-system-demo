@@ -174,7 +174,7 @@ async function main() {
   }
   const karachi = await cityByName("Karachi", "Sindh");
   const lahore = await cityByName("Lahore", "Punjab");
-  const islamabad = await cityByName("Islamabad", "Punjab");
+  const islamabad = await cityByName("Islamabad", "Islamabad Capital Territory");
   const peshawar = await cityByName("Peshawar", "Khyber Pakhtunkhwa");
   const hyderabad = await cityByName("Hyderabad", "Sindh");
 
@@ -191,6 +191,13 @@ async function main() {
       name: "Indus Trade Partners",
       cityId: hyderabad.id,
       phone: "0300-1000202",
+    },
+  });
+  const capital = await prisma.distributor.create({
+    data: {
+      name: "Capital Trade Distribution",
+      cityId: islamabad.id,
+      phone: "0300-1000303",
     },
   });
 
@@ -217,9 +224,10 @@ async function main() {
       shortName: "ISL-DIST",
       cityId: islamabad.id,
       warehouseType: "DISTRIBUTOR",
-      distributorId: frontier.id,
+      distributorId: capital.id,
     },
-  });  const pwrWarehouse = await prisma.warehouse.create({
+  });
+  const pwrWarehouse = await prisma.warehouse.create({
     data: {
       name: "Peshawar Distributor Warehouse",
       shortName: "PWR-DIST",
@@ -259,7 +267,12 @@ async function main() {
     data: { name: "LHR-01 Gulberg", cityId: lahore.id, territoryId: lhrCentral.id },
   });
   const routeIsl1 = await prisma.route.create({
-    data: { name: "ISL-01 Faisalabad Road", cityId: islamabad.id, territoryId: islCentral.id },
+    data: {
+      name: "ISL-01 Blue Area",
+      cityId: islamabad.id,
+      territoryId: islCentral.id,
+      distributorId: capital.id,
+    },
   });
   const routePwr1 = await prisma.route.create({
     data: {
@@ -350,6 +363,11 @@ async function main() {
     code: "EMP-0009", name: "Omar Latif", role: "ADMINISTRATION",
     designation: "Operations Administrator", salary: 88_000, cityId: karachi.id,
     joinedDaysAgo: 1_500,
+  });
+  const bookerZara = await staffMember({
+    code: "EMP-0010", name: "Zara Hameed", role: "BOOKER",
+    designation: "Distributor Order Booker", salary: 53_000, cityId: islamabad.id,
+    routeId: routeIsl1.id, distributorId: capital.id, joinedDaysAgo: 210,
   });
 
   // --- Demo logins -------------------------------------------------------
@@ -476,6 +494,11 @@ async function main() {
       creditDays: 21, taxRegistered: true, address: "Auto Bhan Road, Hyderabad",
     },
     {
+      name: "Capital Trade Distribution", type: "DISTRIBUTOR", cityId: islamabad.id,
+      routeId: routeIsl1.id, distributorId: capital.id, creditLimit: 1_900_000,
+      creditDays: 21, taxRegistered: true, address: "Blue Area, Islamabad",
+    },
+    {
       name: "Tariq Road Superstore", type: "RETAILER", cityId: karachi.id,
       territoryId: khiCentral.id, routeId: routeKhi1.id, bookerId: bookerAyesha.id,
       creditLimit: 300_000, creditDays: 14, taxRegistered: true,
@@ -510,6 +533,18 @@ async function main() {
       territoryId: lhrCentral.id, routeId: routeLhr1.id, bookerId: bookerDanish.id,
       creditLimit: 260_000, creditDays: 14, taxRegistered: false,
       address: "Model Town Link Road, Lahore",
+    },
+    {
+      name: "Blue Area Mega Store", type: "RETAILER", cityId: islamabad.id,
+      territoryId: islCentral.id, routeId: routeIsl1.id, distributorId: capital.id,
+      bookerId: bookerZara.id, creditLimit: 190_000, creditDays: 7,
+      taxRegistered: true, address: "Jinnah Avenue, Blue Area, Islamabad",
+    },
+    {
+      name: "F-10 Family Store", type: "RETAILER", cityId: islamabad.id,
+      territoryId: islCentral.id, routeId: routeIsl1.id, distributorId: capital.id,
+      bookerId: bookerZara.id, creditLimit: 150_000, creditDays: 7,
+      taxRegistered: false, address: "F-10 Markaz, Islamabad",
     },
     {
       name: "Saddar Grocery Mart", type: "RETAILER", cityId: peshawar.id,
@@ -616,6 +651,7 @@ async function main() {
     for (const [warehouse, low, high, isCompany] of [
       [khiWarehouse, 900, 1_500, true],
       [lhrWarehouse, 420, 700, true],
+      [islWarehouse, 90, 180, false],
       [pwrWarehouse, 90, 180, false],
       [hydWarehouse, 80, 160, false],
     ] as const) {
@@ -703,6 +739,12 @@ async function main() {
       distributorId: indus.id, routeId: routeHyd1.id, bookerId: bookerHina.id,
       movementType: "PRIMARY_OUT",
     },
+    {
+      salesType: "PRIMARY", sellerType: "COMPANY", customerName: "Capital Trade Distribution",
+      sourceWarehouseId: khiWarehouse.id, destinationWarehouseId: islWarehouse.id,
+      distributorId: capital.id, routeId: routeIsl1.id, bookerId: bookerZara.id,
+      movementType: "PRIMARY_OUT",
+    },
     ...["Tariq Road Superstore", "Bahadurabad Cash & Carry"].map((name) => ({
       salesType: "DIRECT" as const, sellerType: "COMPANY" as const, customerName: name,
       sourceWarehouseId: khiWarehouse.id, destinationWarehouseId: null,
@@ -731,6 +773,12 @@ async function main() {
       salesType: "SECONDARY" as const, sellerType: "DISTRIBUTOR" as const, customerName: name,
       sourceWarehouseId: hydWarehouse.id, destinationWarehouseId: null,
       distributorId: indus.id, routeId: routeHyd1.id, bookerId: bookerHina.id,
+      movementType: "SECONDARY_OUT" as const,
+    })),
+    ...["Blue Area Mega Store", "F-10 Family Store"].map((name) => ({
+      salesType: "SECONDARY" as const, sellerType: "DISTRIBUTOR" as const, customerName: name,
+      sourceWarehouseId: islWarehouse.id, destinationWarehouseId: null,
+      distributorId: capital.id, routeId: routeIsl1.id, bookerId: bookerZara.id,
       movementType: "SECONDARY_OUT" as const,
     })),
   ];
@@ -1199,7 +1247,7 @@ async function main() {
   ]);
 
   console.log(`Demo data ready:
-  ${customers.length} customers, ${finishedGoods.length + rawMaterials.length + packaging.length} products, 4 warehouses
+  ${customers.length} customers, ${finishedGoods.length + rawMaterials.length + packaging.length} products, 5 warehouses
   ${invoiceCount} invoices, ${paymentCount} recoveries
   ${batchCount} stock batches (${nearExpiry} expiring within 90 days), ${movementCount} stock movements
 
